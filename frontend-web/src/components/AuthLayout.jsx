@@ -87,7 +87,7 @@ export default function AuthLayout({ userData }) {
         {/* Navigation Menu - CONDITIONALLY RENDERED */}
         <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
           
-          {/* Only show Data Center if user is an Admin */}
+          {/* Only show Admin Dashboard if user is an Admin */}
           {isAdmin && (
             <Link to="/org-dashboard" onClick={() => setIsMobile && setIsSidebarOpen(false)} style={navItemStyle(location.pathname === '/org-dashboard')}>
               <LayoutDashboard size={18} /> Admin Dashboard

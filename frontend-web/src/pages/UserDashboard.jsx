@@ -67,8 +67,11 @@ export default function UserDashboard() {
     setIsCreating(true);
     try {
       const res = await createWorkspace({ name: newOrgName });
+      // Set the newly created org as the active one
       localStorage.setItem('activeOrgId', res.data.org_id);
-      window.location.reload();
+      
+      // Safely navigate to the root to remount the context and avoid 404s
+      window.location.href = '/'; 
     } catch (err) {
       alert("Failed to create workspace.");
       setIsCreating(false);

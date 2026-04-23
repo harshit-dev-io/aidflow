@@ -12,6 +12,13 @@ export const WorkspaceProvider = ({ children }) => {
   const [userOrganizations, setUserOrganizations] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const switchWorkspace = (orgId, role) => {
+    setActiveOrgId(orgId);
+    setActiveRole(role);
+    localStorage.setItem('activeOrgId', orgId);
+    localStorage.setItem('activeRole', role);
+  };
+
   const fetchUserOrgs = async () => {
     try {
       const user = auth.currentUser;
@@ -22,33 +29,39 @@ export const WorkspaceProvider = ({ children }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      setUserOrganizations(res.data);
+      const orgs = res.data;
+      setUserOrganizations(orgs);
       
-      // Sync role if org is already active
-      if (activeOrgId) {
-        const currentOrg = res.data.find(o => o.org_id === activeOrgId);
-        if (currentOrg) {
-          setActiveRole(currentOrg.role);
-          localStorage.setItem('activeRole', currentOrg.role);
+      // --- BULLETPROOF AUTO-SELECT LOGIC ---
+      const storedOrgId = localStorage.getItem('activeOrgId');
+      
+      if (orgs.length > 0) {
+        // Check if the stored org actually exists in their current list
+        const isValidOrg = orgs.some(o => o.org_id === storedOrgId);
+        
+        if (!storedOrgId || !isValidOrg) {
+          // If no valid org is selected, force select the first one
+          switchWorkspace(orgs[0].org_id, orgs[0].role);
+        } else {
+          // Ensure role is synced for the valid stored org
+          const currentOrg = orgs.find(o => o.org_id === storedOrgId);
+          if (currentOrg) {
+            setActiveRole(currentOrg.role);
+            localStorage.setItem('activeRole', currentOrg.role);
+          }
         }
-      }
-
-      // Default to first org if none active
-      if (!activeOrgId && res.data.length > 0) {
-        switchWorkspace(res.data[0].org_id, res.data[0].role);
+      } else {
+        // User has no organizations
+        setActiveOrgId('');
+        setActiveRole('');
+        localStorage.removeItem('activeOrgId');
+        localStorage.removeItem('activeRole');
       }
     } catch (err) {
       console.error("Failed to fetch user organizations", err);
     } finally {
       setLoading(false);
     }
-  };
-
-  const switchWorkspace = (orgId, role) => {
-    setActiveOrgId(orgId);
-    setActiveRole(role);
-    localStorage.setItem('activeOrgId', orgId);
-    localStorage.setItem('activeRole', role);
   };
 
   useEffect(() => {
