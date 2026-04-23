@@ -1,0 +1,11 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // For Hackathon MVP: Allow read/write to all authenticated users
+    // Warning: Not for production!
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

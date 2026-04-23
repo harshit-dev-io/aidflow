@@ -1,0 +1,9 @@
+venv/
+node_modules/
+dist/
+build/
+# Local environment files
+.env
+mobile_app/
+
+firebase-adminsdk.json
