@@ -1,3 +1,4 @@
+import { useWorkspace } from '../context/WorkspaceContext'; // <-- ADD THIS
 import React, { useState, useEffect } from 'react';
 import { getTasks, patchTask, createWorkspace } from '../services/api';
 import { MapPin, Clock, CheckCircle, Briefcase, Plus, X, User, Activity, Loader2, UploadCloud, FileText } from 'lucide-react';
@@ -21,18 +22,28 @@ export default function UserDashboard() {
   const [newOrgName, setNewOrgName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+
+  // --- NEW: Grab the active organization ID from context ---
+  const { activeOrgId } = useWorkspace(); 
   
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) loadMyAssignments();
-      else setIsLoading(false);
+      // Only load assignments if the user is logged in AND has an active org selected
+      if (user && activeOrgId) {
+        loadMyAssignments(activeOrgId);
+      } else {
+        setIsLoading(false);
+        setTasks([]); // Clear tasks if no org is selected
+      }
     });
     return () => unsubscribe();
-  }, []);
+  }, [activeOrgId]); // <-- NEW: Re-run this effect when the user switches NGOs
 
-  const loadMyAssignments = async () => {
+  // --- NEW: Pass the activeOrgId into the API call ---
+  const loadMyAssignments = async (orgId) => {
+    setIsLoading(true);
     try {
-      const res = await getTasks(); 
+      const res = await getTasks(orgId); // <-- Pass the ID here!
       setTasks(res.data);
     } catch (e) {
       console.error("Error loading assignments", e);
@@ -46,7 +57,7 @@ export default function UserDashboard() {
       await patchTask(taskId, { status: newStatus });
     } catch (err) {
       alert("Failed to update status");
-      loadMyAssignments(); 
+      if (activeOrgId) loadMyAssignments(activeOrgId); // Revert on failure
     }
   };
 

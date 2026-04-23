@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { auth } from '../firebase';
 
-const API_BASE_URL = 'https://aidflow-api-477640439294.us-central1.run.app/api';
+const API_BASE_URL = 'https://aidflow-api-477640439294.us-central1.run.app//api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
