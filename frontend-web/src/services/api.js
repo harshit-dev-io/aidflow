@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { auth } from '../firebase';
 
-const API_BASE_URL = 'https://aidflow-api-477640439294.us-central1.run.app//api';
+const API_BASE_URL = 'http://localhost:8000/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -47,7 +47,23 @@ export const editMemberRole = (data) => api.put('/org/members/edit/', data);
 // ==========================================
 // Data & Tasks (Scoped)
 // ==========================================
-export const ingestData = (data) => api.post('/data/ingest/', data);
+export const ingestData = async (payload, orgId = null) => {
+  const user = auth.currentUser;
+  const token = await user.getIdToken();
+  
+  const headers = {
+    'Authorization': `Bearer ${token}`
+    // Notice: We removed 'multipart/form-data'. Axios will automatically set 'application/json'.
+  };
+
+  // Dynamically attach the active organization ID so Django's RequiresActiveOrg is happy
+  if (orgId) {
+    // Note: 'X-Active-Org-Id' is standard, but check your Django middleware if you used a different name!
+    headers['X-Active-Org-Id'] = orgId; 
+  }
+
+  return await axios.post('http://localhost:8000/api/data/ingest/', payload, { headers });
+};
 export const getTasks = (params) => api.get('/tasks/', { params });
 export const patchTask = (taskId, data) => api.patch(`/tasks/${taskId}/`, data);
 export const createTask = (data) => api.post('/tasks/create/', data);

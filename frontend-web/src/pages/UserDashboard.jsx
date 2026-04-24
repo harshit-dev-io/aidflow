@@ -1,9 +1,11 @@
 import { useWorkspace } from '../context/WorkspaceContext'; // <-- ADD THIS
 import React, { useState, useEffect } from 'react';
-import { getTasks, patchTask, createWorkspace } from '../services/api';
+import { getTasks, patchTask, createWorkspace  , ingestData} from '../services/api';
 import { MapPin, Clock, CheckCircle, Briefcase, Plus, X, User, Activity, Loader2, UploadCloud, FileText } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebase';
+import { storage } from '../firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 // --- PREMIUM SKELETON COMPONENT ---
 const Skeleton = ({ width, height, borderRadius = '6px', style }) => (
@@ -11,6 +13,7 @@ const Skeleton = ({ width, height, borderRadius = '6px', style }) => (
 );
 
 export default function UserDashboard() {
+  const fileInputRef = React.useRef(null);
   const [tasks, setTasks] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   
@@ -22,6 +25,7 @@ export default function UserDashboard() {
   const [newOrgName, setNewOrgName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
 
   // --- NEW: Grab the active organization ID from context ---
   const { activeOrgId } = useWorkspace(); 
@@ -41,15 +45,21 @@ export default function UserDashboard() {
 
   // --- NEW: Pass the activeOrgId into the API call ---
   const loadMyAssignments = async (orgId) => {
-    setIsLoading(true);
-    try {
-      const res = await getTasks(orgId); // <-- Pass the ID here!
+  setIsLoading(true);
+  try {
+    const res = await getTasks(orgId);
+    // Ensure res.data exists and is an array before setting state
+    if (res && res.data && Array.isArray(res.data)) {
       setTasks(res.data);
-    } catch (e) {
-      console.error("Error loading assignments", e);
+    } else {
+      setTasks([]);
     }
-    setIsLoading(false);
-  };
+  } catch (e) {
+    console.error("Error loading assignments", e);
+    setTasks([]); // Reset tasks on error to prevent UI crashes
+  }
+  setIsLoading(false);
+};
 
   const updateStatus = async (taskId, newStatus) => {
     try {
@@ -60,6 +70,63 @@ export default function UserDashboard() {
       if (activeOrgId) loadMyAssignments(activeOrgId); // Revert on failure
     }
   };
+
+  const handleBrowseClick = () => {
+  fileInputRef.current.click();
+};
+const onFileChange = (e) => {
+  if (e.target.files && e.target.files[0]) {
+    setSelectedFile(e.target.files[0]);
+  }
+};
+
+const handleActualUpload = async (e) => {
+  e.preventDefault();
+  if (!selectedFile || !activeOrgId) return;
+
+  setIsUploading(true);
+  try {
+    // 1. Upload to Firebase Storage (Matching OrgDashboard logic)
+    const storageRef = ref(storage, `uploads/${activeOrgId}/${Date.now()}-${selectedFile.name}`);
+    await uploadBytes(storageRef, selectedFile);
+    
+    // 2. Get the Firebase download URL
+    const fileUrl = await getDownloadURL(storageRef);
+    
+    // 3. Convert to Base64 and send standard JSON payload
+    const reader = new FileReader();
+    reader.readAsDataURL(selectedFile);
+    reader.onload = async () => {
+      try {
+        const payload = { 
+          file: reader.result.split(',')[1], // The Base64 string
+          mime_type: selectedFile.type,
+          file_url: fileUrl,
+          file_size: selectedFile.size,
+          file_name: selectedFile.name,
+          // org_id: activeOrgId // Included since your backend might expect it from the user dash
+        };
+
+        const res = await ingestData(payload, activeOrgId);
+        
+        alert("Upload successful!");
+        setShowUploadModal(false);
+        setSelectedFile(null);
+        loadMyAssignments(activeOrgId); 
+      } catch (apiErr) {
+        console.error("API Error:", apiErr);
+        const errorMsg = apiErr.response?.data?.error || "Analysis failed.";
+        alert(`Upload failed: ${errorMsg}`);
+      } finally {
+        setIsUploading(false);
+      }
+    };
+  } catch (err) {
+    console.error("Firebase upload failed:", err);
+    alert("File upload to storage failed.");
+    setIsUploading(false);
+  }
+};
 
   const handleCreateWorkspace = async (e) => {
     e.preventDefault();
@@ -196,37 +263,49 @@ export default function UserDashboard() {
       </div>
 
       {/* --- UPLOAD DATA MODAL --- */}
-      {showUploadModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
-          <div style={{ background: '#18181b', padding: '32px', borderRadius: '16px', width: '100%', maxWidth: '440px', border: '1px solid #27272a', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', boxSizing: 'border-box' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
-              <h3 style={{ margin: 0, color: '#fff', fontWeight: 600, fontSize: '1.25rem' }}>Upload Field Data</h3>
-              <X size={20} style={{ cursor: 'pointer', color: '#a1a1aa' }} onClick={() => !isUploading && setShowUploadModal(false)} />
-            </div>
-            
-            <p style={{ color: '#a1a1aa', fontSize: '0.9rem', marginBottom: '24px', lineHeight: 1.5 }}>
-              Upload unstructured field reports, audio logs, or images. Gemini AI will automatically parse the data and route it to your Org Dashboard.
-            </p>
+{/* --- UPLOAD DATA MODAL --- */}
+{showUploadModal && (
+  <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+    <div style={{ background: '#18181b', padding: '32px', borderRadius: '16px', width: '100%', maxWidth: '440px', border: '1px solid #27272a', boxSizing: 'border-box' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
+        <h3 style={{ margin: 0, color: '#fff', fontWeight: 600, fontSize: '1.25rem' }}>Upload Field Data</h3>
+        <X size={20} style={{ cursor: 'pointer', color: '#a1a1aa' }} onClick={() => !isUploading && setShowUploadModal(false)} />
+      </div>
+      
+      {/* Hidden File Input now calls onFileChange */}
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        style={{ display: 'none' }} 
+        onChange={onFileChange} 
+      />
 
-            <form onSubmit={handleSimulateUpload} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ border: '2px dashed #3f3f46', borderRadius: '12px', padding: '32px', textAlign: 'center', background: '#121212', cursor: 'pointer' }}>
-                <FileText size={32} color="#71717a" style={{ margin: '0 auto 12px' }} />
-                <div style={{ color: '#fff', fontWeight: 500, fontSize: '0.95rem' }}>Click to browse files</div>
-                <div style={{ color: '#71717a', fontSize: '0.8rem', marginTop: '4px' }}>PDF, JPG, PNG, or MP3 (Max 10MB)</div>
-              </div>
-              
-              <button 
-                type="submit" 
-                disabled={isUploading}
-                style={{ width: '100%', background: '#3b82f6', color: '#fff', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 600, fontSize: '0.95rem', cursor: isUploading ? 'not-allowed' : 'pointer', transition: 'background 0.2s', marginTop: '8px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', opacity: isUploading ? 0.7 : 1 }}
-              >
-                {isUploading ? <Loader2 size={18} className="animate-pulse" /> : <UploadCloud size={18} />}
-                {isUploading ? 'Gemini is Analyzing...' : 'Process with AI'}
-              </button>
-            </form>
+      <form onSubmit={handleActualUpload} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div 
+          onClick={() => fileInputRef.current.click()}
+          style={{ border: '2px dashed #3f3f46', borderRadius: '12px', padding: '32px', textAlign: 'center', background: '#121212', cursor: 'pointer' }}
+        >
+          <FileText size={32} color={selectedFile ? "#3b82f6" : "#71717a"} style={{ margin: '0 auto 12px' }} />
+          <div style={{ color: '#fff', fontWeight: 500, fontSize: '0.95rem' }}>
+            {selectedFile ? selectedFile.name : "Click to browse files"}
+          </div>
+          <div style={{ color: '#71717a', fontSize: '0.8rem', marginTop: '4px' }}>
+            {selectedFile ? `${(selectedFile.size / 1024 / 1024).toFixed(2)} MB` : "PDF, JPG, PNG, or MP3"}
           </div>
         </div>
-      )}
+        
+        <button 
+          type="submit" 
+          disabled={isUploading || !selectedFile}
+          style={{ width: '100%', background: '#3b82f6', color: '#fff', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 600, fontSize: '0.95rem', cursor: (isUploading || !selectedFile) ? 'not-allowed' : 'pointer', transition: 'background 0.2s', marginTop: '8px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', opacity: (isUploading || !selectedFile) ? 0.7 : 1 }}
+        >
+          {isUploading ? <Loader2 size={18} className="animate-pulse" /> : <UploadCloud size={18} />}
+          {isUploading ? 'Gemini is Analyzing...' : 'Process with AI'}
+        </button>
+      </form>
+    </div>
+  </div>
+)}
 
       {/* --- CREATE WORKSPACE MODAL --- */}
       {showModal && (

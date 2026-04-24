@@ -133,7 +133,8 @@ export default function OrgDashboard() {
     const file = e.target.files[0];
     if (!file) return;
     setIsUploading(true);
-    try {
+
+    try {  // <-- Make sure this try block is still here!
       const storageRef = ref(storage, `uploads/${activeOrgId}/${Date.now()}-${file.name}`);
       await uploadBytes(storageRef, file);
       
@@ -143,13 +144,16 @@ export default function OrgDashboard() {
       reader.readAsDataURL(file);
       reader.onload = async () => {
         try {
-          const res = await ingestData({ 
+          const payload = { 
             file: reader.result.split(',')[1], 
             mime_type: file.type,
             file_url: fileUrl,
             file_size: file.size,
             file_name: file.name
-          });
+          };
+          
+          // ADD activeOrgId AS THE SECOND ARGUMENT HERE 👇
+          const res = await ingestData(payload, activeOrgId); 
           
           if (res.data?.is_duplicate) {
             alert("Data ingested! Flagged as a DUPLICATE of an existing report.");
@@ -163,10 +167,13 @@ export default function OrgDashboard() {
           alert(apiErr.response?.data?.error || "Analysis failed.");
         }
       };
-    } catch (err) { alert("Upload failed."); } 
-    finally { setIsUploading(false); }
+    } catch (err) { 
+        alert("Upload failed."); 
+    } finally { 
+        setIsUploading(false); 
+    }
   };
-
+  
   // --- Matching Handlers ---
   const handleAssign = async (volunteerUid) => {
     try {
