@@ -5,7 +5,7 @@ const admin = require('firebase-admin');
 admin.initializeApp();
 
 // Configuration: Replace with your actual deployed Django URL later, or use ngrok for local testing
-const DJANGO_API_URL = 'http://localhost:8000/api/process-data';
+const DJANGO_API_URL = 'https://aidflow-api-477640439294.us-central1.run.app/api/process-data';
 
 /**
  * Triggered automatically whenever a new file is uploaded to Firebase Storage.

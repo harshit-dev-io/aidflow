@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { auth } from '../firebase';
 
-const API_BASE_URL = 'http://localhost:8000/api';
+const API_BASE_URL = 'https://aidflow-api-477640439294.us-central1.run.app/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -62,7 +62,7 @@ export const ingestData = async (payload, orgId = null) => {
     headers['X-Active-Org-Id'] = orgId; 
   }
 
-  return await axios.post('http://localhost:8000/api/data/ingest/', payload, { headers });
+  return await axios.post('https://aidflow-api-477640439294.us-central1.run.app/api/data/ingest/', payload, { headers });
 };
 export const getTasks = (params) => api.get('/tasks/', { params });
 export const patchTask = (taskId, data) => api.patch(`/tasks/${taskId}/`, data);

@@ -25,7 +25,7 @@ export const WorkspaceProvider = ({ children }) => {
       if (!user) return;
       
       const token = await user.getIdToken();
-      const res = await axios.get('http://localhost:8000/api/user/orgs/', {
+      const res = await axios.get('https://aidflow-api-477640439294.us-central1.run.app/api/user/orgs/', {
         headers: { Authorization: `Bearer ${token}` }
       });
       
